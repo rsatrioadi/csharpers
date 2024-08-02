@@ -1,4 +1,4 @@
 /.idea
-/CSharPers
-/csharpers.json
-/pacman.json
+/*.json
+*/bin/
+*/obj/
