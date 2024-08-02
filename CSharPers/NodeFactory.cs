@@ -1,14 +1,15 @@
 using CSharPers.LPG;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Text.RegularExpressions;
 
 namespace CSharPers;
 
 internal class NodeFactory
 {
-    public static Node CreateNamespaceNode(INamespaceSymbol namespaceSymbol)
+	public static Node CreateNamespaceNode(INamespaceSymbol namespaceSymbol)
     {
-        return new Node(namespaceSymbol.ToString(), "Container")
+        return new Node(RemoveAngleBrackets(namespaceSymbol.ToString()), "Container")
         {
             Properties =
             {
@@ -20,7 +21,7 @@ internal class NodeFactory
         };
     }
 
-    public static bool CollectClassNodes(SemanticModel semanticModel, ClassDeclarationSyntax classDeclaration,
+    public static bool CollectClassNode(SemanticModel semanticModel, ClassDeclarationSyntax classDeclaration,
         Graph graph, out Node? node)
     {
         if (semanticModel.GetDeclaredSymbol(classDeclaration) is not INamedTypeSymbol classSymbol)
@@ -29,7 +30,7 @@ internal class NodeFactory
             return false;
         }
 
-        node = new Node(classSymbol.ToString(), "Structure")
+        node = new Node(RemoveAngleBrackets(classSymbol.ToString()), "Structure")
         {
             Properties =
             {
@@ -45,23 +46,27 @@ internal class NodeFactory
 
         // Handle inheritance
         if (classSymbol.BaseType != null && classSymbol.BaseType.SpecialType != SpecialType.System_Object)
-            AddOrUpdateEdge(graph, node.Id, classSymbol.BaseType.ToString(), "specializes");
+		{
+            AddOrUpdateEdge(graph, node.Id, RemoveAngleBrackets(classSymbol.BaseType.ToString()), "specializes");
+		}
 
         foreach (var interfaceImplemented in classSymbol.Interfaces)
-            AddOrUpdateEdge(graph, node.Id, interfaceImplemented.ToString(), "specializes");
+		{
+			AddOrUpdateEdge(graph, node.Id, RemoveAngleBrackets(interfaceImplemented.ToString()), "specializes");
+		}
 
         foreach (var nestedClass in classDeclaration.Members.OfType<ClassDeclarationSyntax>())
         {
             if (semanticModel.GetDeclaredSymbol(nestedClass) is not INamedTypeSymbol nestedClassSymbol)
                 continue;
 
-            AddOrUpdateEdge(graph, node.Id, nestedClassSymbol.ToString(), "nests");
+            AddOrUpdateEdge(graph, node.Id, RemoveAngleBrackets(nestedClassSymbol.ToString()), "nests");
         }
 
         return true;
     }
 
-    public static bool CollectInterfaceNodes(SemanticModel semanticModel,
+    public static bool CollectInterfaceNode(SemanticModel semanticModel,
         InterfaceDeclarationSyntax interfaceDeclaration, Graph graph, out Node? node)
     {
         if (semanticModel.GetDeclaredSymbol(interfaceDeclaration) is not INamedTypeSymbol interfaceSymbol)
@@ -70,7 +75,7 @@ internal class NodeFactory
             return false;
         }
 
-        node = new Node(interfaceSymbol.ToString(), "Structure")
+        node = new Node(RemoveAngleBrackets(interfaceSymbol.ToString()), "Structure")
         {
             Properties =
             {
@@ -87,7 +92,7 @@ internal class NodeFactory
             if (semanticModel.GetDeclaredSymbol(nestedInterface) is not INamedTypeSymbol nestedInterfaceSymbol)
                 continue;
 
-            AddOrUpdateEdge(graph, node.Id, nestedInterfaceSymbol.ToString(), "nests");
+            AddOrUpdateEdge(graph, node.Id, RemoveAngleBrackets(nestedInterfaceSymbol.ToString()), "nests");
         }
 
         return true;
@@ -101,7 +106,7 @@ internal class NodeFactory
             {
                 if (semanticModel.GetDeclaredSymbol(methodDeclaration) is not IMethodSymbol methodSymbol) continue;
 
-                var methodNode = new Node(methodSymbol.ToString(), "Operation")
+                var methodNode = new Node(RemoveAngleBrackets(methodSymbol.ToString()), "Operation")
                 {
                     Properties =
                     {
@@ -117,7 +122,7 @@ internal class NodeFactory
 
                 foreach (var parameter in methodSymbol.Parameters)
                 {
-                    var parameterNode = new Node($"{methodSymbol}.{parameter.Name}", "Variable")
+                    var parameterNode = new Node(RemoveAngleBrackets($"{methodSymbol}.{parameter.Name}"), "Variable")
                     {
                         Properties =
                         {
@@ -130,22 +135,22 @@ internal class NodeFactory
                     graph.Nodes.Add(parameterNode);
 
                     AddOrUpdateEdge(graph, methodNode.Id, parameterNode.Id, "hasParameter");
-                    AddOrUpdateEdge(graph, parameterNode.Id, parameter.Type.ToString(), "type");
+                    AddOrUpdateEdge(graph, parameterNode.Id, RemoveAngleBrackets(parameter.Type.ToString()), "type");
                 }
 
                 if (methodSymbol.ReturnType.ToString() != "void")
-                    AddOrUpdateEdge(graph, methodNode.Id, methodSymbol.ReturnType.ToString(), "returnType");
+                    AddOrUpdateEdge(graph, methodNode.Id, RemoveAngleBrackets(methodSymbol.ReturnType.ToString()), "returnType");
 
                 foreach (var invokedMethod in methodDeclaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
                     if (semanticModel.GetSymbolInfo(invokedMethod).Symbol is not IMethodSymbol invokedSymbol) continue;
 
-                    AddOrUpdateEdge(graph, methodNode.Id, invokedSymbol.ToString(), "invokes");
+                    AddOrUpdateEdge(graph, methodNode.Id, RemoveAngleBrackets(invokedSymbol.ToString()), "invokes");
                 }
 
                 foreach (var objectCreation in
                          methodDeclaration.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-                    AddOrUpdateEdge(graph, methodNode.Id, semanticModel.GetTypeInfo(objectCreation).Type?.ToString(),
+                    AddOrUpdateEdge(graph, methodNode.Id, RemoveAngleBrackets(semanticModel.GetTypeInfo(objectCreation).Type?.ToString()),
                         "instantiates");
             }
             else if (member is ConstructorDeclarationSyntax constructorDeclaration)
@@ -153,7 +158,7 @@ internal class NodeFactory
                 if (semanticModel.GetDeclaredSymbol(constructorDeclaration) is not IMethodSymbol constructorSymbol)
                     continue;
 
-                var constructorNode = new Node(constructorSymbol.ToString(), "Constructor")
+                var constructorNode = new Node(RemoveAngleBrackets(constructorSymbol.ToString()), "Constructor")
                 {
                     Properties =
                     {
@@ -169,7 +174,7 @@ internal class NodeFactory
 
                 foreach (var parameter in constructorSymbol.Parameters)
                 {
-                    var parameterNode = new Node($"{constructorSymbol}.{parameter.Name}", "Variable")
+                    var parameterNode = new Node(RemoveAngleBrackets($"{constructorSymbol}.{parameter.Name}"), "Variable")
                     {
                         Properties =
                         {
@@ -182,7 +187,7 @@ internal class NodeFactory
                     graph.Nodes.Add(parameterNode);
 
                     AddOrUpdateEdge(graph, constructorNode.Id, parameterNode.Id, "hasParameter");
-                    AddOrUpdateEdge(graph, parameterNode.Id, parameter.Type.ToString(), "type");
+                    AddOrUpdateEdge(graph, parameterNode.Id, RemoveAngleBrackets(parameter.Type.ToString()), "type");
                 }
 
                 AddOrUpdateEdge(graph, constructorNode.Id, classNode.Id, "returnType");
@@ -192,13 +197,13 @@ internal class NodeFactory
                 {
                     if (semanticModel.GetSymbolInfo(invokedMethod).Symbol is not IMethodSymbol invokedSymbol) continue;
 
-                    AddOrUpdateEdge(graph, constructorNode.Id, invokedSymbol.ToString(), "invokes");
+                    AddOrUpdateEdge(graph, constructorNode.Id, RemoveAngleBrackets(invokedSymbol.ToString()), "invokes");
                 }
 
                 foreach (var objectCreation in constructorDeclaration.DescendantNodes()
                              .OfType<ObjectCreationExpressionSyntax>())
                     AddOrUpdateEdge(graph, constructorNode.Id,
-                        semanticModel.GetTypeInfo(objectCreation).Type?.ToString(), "instantiates");
+						RemoveAngleBrackets(semanticModel.GetTypeInfo(objectCreation).Type?.ToString()), "instantiates");
             }
             else if (member is FieldDeclarationSyntax fieldDeclaration)
             {
@@ -206,7 +211,7 @@ internal class NodeFactory
                 {
                     if (semanticModel.GetDeclaredSymbol(variable) is not IFieldSymbol fieldSymbol) continue;
 
-                    var fieldNode = new Node(fieldSymbol.ToString(), "Variable")
+                    var fieldNode = new Node(RemoveAngleBrackets(fieldSymbol.ToString()), "Variable")
                     {
                         Properties =
                         {
@@ -222,24 +227,9 @@ internal class NodeFactory
                         AnalyzeInitializer(initializer, fieldSymbol, semanticModel, graph);
 
                     AddOrUpdateEdge(graph, classNode.Id, fieldNode.Id, "hasVariable");
-                    AddOrUpdateEdge(graph, fieldNode.Id, fieldSymbol.Type.ToString(), "type");
+                    AddOrUpdateEdge(graph, fieldNode.Id, RemoveAngleBrackets(fieldSymbol.Type.ToString()), "type");
                 }
             }
-    }
-
-    public static void AddOrUpdateEdge(Graph graph, string sourceId, string targetId, string label)
-    {
-        var existingEdge = graph.Edges.FirstOrDefault(edge =>
-            edge.SourceId == sourceId && edge.TargetId == targetId && edge.Label == label);
-        if (existingEdge != null)
-        {
-            existingEdge.Properties["weight"] = (int)existingEdge.Properties["weight"] + 1;
-        }
-        else
-        {
-            var edge = new Edge(sourceId, targetId, label);
-            graph.Edges.Add(edge);
-        }
     }
 
     private static void AnalyzeInitializer(ExpressionSyntax initializer, IFieldSymbol fieldSymbol,
@@ -249,7 +239,7 @@ internal class NodeFactory
         {
             if (semanticModel.GetSymbolInfo(invokedMethod).Symbol is not IMethodSymbol invokedSymbol) continue;
 
-            var fieldInitializerNode = new Node($"{fieldSymbol}.initializer", "Script")
+            var fieldInitializerNode = new Node(RemoveAngleBrackets($"{fieldSymbol}.initializer"), "Script")
             {
                 Properties =
                 {
@@ -261,12 +251,12 @@ internal class NodeFactory
             };
             graph.Nodes.Add(fieldInitializerNode);
 
-            AddOrUpdateEdge(graph, fieldInitializerNode.Id, invokedSymbol.ToString(), "invokes");
+            AddOrUpdateEdge(graph, fieldInitializerNode.Id, RemoveAngleBrackets(invokedSymbol.ToString()), "invokes");
         }
 
         foreach (var objectCreation in initializer.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
-            var fieldInitializerNode = new Node($"{fieldSymbol}.initializer", "Script")
+            var fieldInitializerNode = new Node(RemoveAngleBrackets($"{fieldSymbol}.initializer"), "Script")
             {
                 Properties =
                 {
@@ -278,7 +268,7 @@ internal class NodeFactory
             };
             graph.Nodes.Add(fieldInitializerNode);
 
-            AddOrUpdateEdge(graph, fieldInitializerNode.Id, semanticModel.GetTypeInfo(objectCreation).Type?.ToString(),
+            AddOrUpdateEdge(graph, fieldInitializerNode.Id, RemoveAngleBrackets(semanticModel.GetTypeInfo(objectCreation).Type?.ToString()),
                 "instantiates");
         }
     }
@@ -295,5 +285,31 @@ internal class NodeFactory
             Accessibility.NotApplicable => "not applicable",
             _ => "unknown"
         };
-    }
+	}
+
+	public static string RemoveAngleBrackets(string input)
+	{
+		// Regular expression pattern to match angle brackets and their content
+		string pattern = @"<[^>]*>";
+
+		// Replace matched patterns with an empty string
+		string result = Regex.Replace(input, pattern, string.Empty);
+
+		return result;
+	}
+
+	public static void AddOrUpdateEdge(Graph graph, string sourceId, string targetId, string label)
+	{
+		var existingEdge = graph.Edges.FirstOrDefault(edge =>
+			edge.SourceId == sourceId && edge.TargetId == targetId && edge.Label == label);
+		if (existingEdge != null)
+		{
+			existingEdge.Properties["weight"] = (int)existingEdge.Properties["weight"] + 1;
+		}
+		else
+		{
+			var edge = new Edge(sourceId, targetId, label);
+			graph.Edges.Add(edge);
+		}
+	}
 }

@@ -21,14 +21,14 @@ internal class SyntaxNodeCollector
 
             foreach (var classDeclaration in ns.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
-                if (!NodeFactory.CollectClassNodes(semanticModel, classDeclaration, graph, out var classNode)) continue;
+                if (!NodeFactory.CollectClassNode(semanticModel, classDeclaration, graph, out var classNode)) continue;
 
                 NodeFactory.AddOrUpdateEdge(graph, namespaceNode.Id, classNode.Id, "contains");
             }
 
             foreach (var interfaceDeclaration in ns.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
             {
-                if (!NodeFactory.CollectInterfaceNodes(semanticModel, interfaceDeclaration, graph,
+                if (!NodeFactory.CollectInterfaceNode(semanticModel, interfaceDeclaration, graph,
                         out var interfaceNode)) continue;
 
                 NodeFactory.AddOrUpdateEdge(graph, namespaceNode.Id, interfaceNode.Id, "contains");
@@ -46,16 +46,16 @@ internal class SyntaxNodeCollector
             var namespaceNode = NodeFactory.CreateNamespaceNode(namespaceSymbol);
             graph.Nodes.Add(namespaceNode);
 
-            foreach (var classDeclaration in ns.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            foreach (var classDeclaration in ns.DescendantNodes(descendIntoChildren: (_) => true).OfType<ClassDeclarationSyntax>())
             {
-                if (!NodeFactory.CollectClassNodes(semanticModel, classDeclaration, graph, out var classNode)) continue;
+                if (!NodeFactory.CollectClassNode(semanticModel, classDeclaration, graph, out var classNode)) continue;
 
                 NodeFactory.AddOrUpdateEdge(graph, namespaceNode.Id, classNode.Id, "contains");
             }
 
-            foreach (var interfaceDeclaration in ns.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
+            foreach (var interfaceDeclaration in ns.DescendantNodes(descendIntoChildren: (_) => true).OfType<InterfaceDeclarationSyntax>())
             {
-                if (!NodeFactory.CollectInterfaceNodes(semanticModel, interfaceDeclaration, graph,
+                if (!NodeFactory.CollectInterfaceNode(semanticModel, interfaceDeclaration, graph,
                         out var interfaceNode)) continue;
 
                 NodeFactory.AddOrUpdateEdge(graph, namespaceNode.Id, interfaceNode.Id, "contains");
@@ -66,11 +66,11 @@ internal class SyntaxNodeCollector
         var globalClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .Where(c => !c.Ancestors().OfType<NamespaceDeclarationSyntax>().Any());
         foreach (var classDeclaration in globalClasses)
-            NodeFactory.CollectClassNodes(semanticModel, classDeclaration, graph, out _);
+            NodeFactory.CollectClassNode(semanticModel, classDeclaration, graph, out _);
 
         var globalInterfaces = root.DescendantNodes().OfType<InterfaceDeclarationSyntax>()
             .Where(i => !i.Ancestors().OfType<NamespaceDeclarationSyntax>().Any());
         foreach (var interfaceDeclaration in globalInterfaces)
-            NodeFactory.CollectInterfaceNodes(semanticModel, interfaceDeclaration, graph, out _);
+            NodeFactory.CollectInterfaceNode(semanticModel, interfaceDeclaration, graph, out _);
     }
 }
