@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 
 namespace CSharPers;
 
-internal class GraphProcessor
+internal static class GraphProcessor
 {
     public static async Task ProcessSolutionAsync(string solutionPath, Graph graph)
     {

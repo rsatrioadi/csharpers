@@ -3,7 +3,7 @@ namespace CSharPers.LPG;
 public class Node(string id, params string[] labels)
 {
     public string Id { get; } = id;
-    public string[] Labels { get; } = labels;
+    public List<string> Labels { get; } = [..labels];
     public Dictionary<string, object> Properties { get; } = [];
 
     public override bool Equals(object? obj)
@@ -25,7 +25,7 @@ public class Node(string id, params string[] labels)
     public string ToString<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType>(
         IGraphCodec<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType> encoder)
     {
-        return encoder.EncodeNode(this).ToString();
+        return encoder.EncodeNode(this)?.ToString() ?? "";
     }
 }
 
@@ -43,7 +43,7 @@ public class Nodes : HashSet<Node>
         return [.. this];
     }
 
-    public Node FindById(string id)
+    public Node? FindById(string id)
     {
         return this.FirstOrDefault(node => node.Id == id);
     }
@@ -61,6 +61,6 @@ public class Nodes : HashSet<Node>
     public string ToString<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType>(
         IGraphCodec<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType> encoder)
     {
-        return encoder.EncodeNodes(this).ToString();
+        return encoder.EncodeNodes(this)?.ToString() ?? "";
     }
 }

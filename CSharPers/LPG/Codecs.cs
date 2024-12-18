@@ -112,16 +112,30 @@ public class CyJsonCodec : IGraphCodec<JObject, JArray, JArray, JObject, JObject
     {
         var data = encodedNode["data"] as JObject;
         var node = new Node(
-            data["id"].ToString(),
-            data["labels"].Select(label => label.ToString()).ToArray()
+            data!["id"]!.ToString(),
+            data["labels"]!.Select(label => label.ToString()).ToArray()
         );
 
         var properties = data["properties"] as JObject;
-        foreach (var prop in properties)
+        foreach (var (key, value) in properties ?? [])
         {
-            var value = prop.Value;
-            node.Properties[prop.Key] =
-                value is JArray array ? array.ToObject<List<object>>() : value.ToObject<object>();
+            switch (value)
+            {
+                case null:
+                    continue;
+                case JArray array:
+                {
+                    var newValue = array.ToObject<List<object>>();
+                    if (newValue != null) node.Properties[key] = newValue;
+                    break;
+                }
+                default:
+                {
+                    var newValue = value.ToObject<object>();
+                    if (newValue != null) node.Properties[key] = newValue;
+                    break;
+                }
+            }
         }
 
         return node;
@@ -131,17 +145,31 @@ public class CyJsonCodec : IGraphCodec<JObject, JArray, JArray, JObject, JObject
     {
         var data = encodedEdge["data"] as JObject;
         var edge = new Edge(
-            data["source"].ToString(),
-            data["target"].ToString(),
-            data["label"].ToString()
+            data!["source"]!.ToString(),
+            data["target"]!.ToString(),
+            data["label"]!.ToString()
         );
 
         var properties = data["properties"] as JObject;
-        foreach (var prop in properties)
+        foreach (var (key, value) in properties ?? [])
         {
-            var value = prop.Value;
-            edge.Properties[prop.Key] =
-                value is JArray array ? array.ToObject<List<object>>() : value.ToObject<object>();
+            switch (value)
+            {
+                case null:
+                    continue;
+                case JArray array:
+                {
+                    var newValue = array.ToObject<List<object>>();
+                    if (newValue != null) edge.Properties[key] = newValue;
+                    break;
+                }
+                default:
+                {
+                    var newValue = value.ToObject<object>();
+                    if (newValue != null) edge.Properties[key] = newValue;
+                    break;
+                }
+            }
         }
 
         return edge;

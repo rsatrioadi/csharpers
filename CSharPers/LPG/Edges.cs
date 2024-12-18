@@ -40,7 +40,7 @@ public class Edge
     public string ToString<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType>(
         IGraphCodec<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType> encoder)
     {
-        return encoder.EncodeEdge(this).ToString();
+        return encoder.EncodeEdge(this)?.ToString() ?? "";
     }
 }
 
@@ -66,6 +66,6 @@ public class Edges : HashSet<Edge>
     public string ToString<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType>(
         IGraphCodec<TGraphType, TNodesType, TEdgesType, TNodeType, TEdgeType> encoder)
     {
-        return encoder.EncodeEdges(this).ToString();
+        return encoder.EncodeEdges(this)?.ToString() ?? "";
     }
 }
