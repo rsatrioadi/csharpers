@@ -1,13 +1,14 @@
-﻿using CSharPers.LPG;
-using Microsoft.Build.Locator;
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
+using CSharPers.Extractor;
+using CSharPers.LPG;
+using Microsoft.Build.Locator;
 
 namespace CSharPers;
 
 internal static class Program
 {
-    public static async Task Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         // Define the input file argument
         var solutionPathArgument = new Argument<string>("solution", "Path to the solution file (.sln)");
@@ -24,19 +25,27 @@ internal static class Program
             outputOption
         };
 
-        // Define the handler
         rootCommand.Handler = CommandHandler.Create<string, string?>(async (solution, output) =>
         {
             MSBuildLocator.RegisterDefaults();
 
-            Graph graph = new(solution);
+            // Extract the graph using our new extractor
+            Graph graph;
+            // try
+            // {
+            graph = await FullCSharpGraphExtractor.ExtractAsync(solution);
+            // }
+            // catch (Exception ex)
+            // {
+            //     await Console.Error.WriteLineAsync($"Error during graph extraction: {ex.Message}");
+            //     return;
+            // }
 
-            await GraphProcessor.ProcessSolutionAsync(solution, graph);
-
+            // Serialize graph to string
             var graphOutput = graph.ToString();
 
+            // Write to file or stdout
             if (!string.IsNullOrEmpty(output))
-            {
                 try
                 {
                     await File.WriteAllTextAsync(output, graphOutput);
@@ -44,16 +53,13 @@ internal static class Program
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error writing to file: {ex.Message}");
+                    await Console.Error.WriteLineAsync($"Error writing to file '{output}': {ex.Message}");
                 }
-            }
             else
-            {
                 Console.WriteLine(graphOutput);
-            }
         });
 
-        // Invoke the command
-        await rootCommand.InvokeAsync(args);
+        // Invoke the parser
+        return await rootCommand.InvokeAsync(args);
     }
 }
