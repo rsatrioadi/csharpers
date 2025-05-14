@@ -13,33 +13,36 @@ internal static class Program
         // Define the input file argument
         var solutionPathArgument = new Argument<string>("solution", "Path to the solution file (.sln)");
 
-        // Define the output file option
         var outputOption = new Option<string?>(
-            ["--output", "-o"],
-            "Path to the output file (optional). If omitted, output will be written to stdout.");
+            aliases: ["--output", "-o"],
+            description: "Path to the output file (optional). If omitted, output will be written to stdout.");
 
-        // Create a root command
-        var rootCommand = new RootCommand("CSharPers: A tool to process and analyze C# solutions.")
+        var externalOption = new Option<bool>(
+            aliases: ["--include-external", "-e"],
+            description: "Include external (non-source) types and members",
+            getDefaultValue: () => false
+        );
+
+        var rootCommand = new RootCommand("CSharPers: Process & analyze C# solutions")
         {
-            solutionPathArgument,
-            outputOption
+            solutionPathArgument, outputOption, externalOption
         };
 
-        rootCommand.Handler = CommandHandler.Create<string, string?>(async (solution, output) =>
+        rootCommand.Handler = CommandHandler.Create<string, string?, bool>(async (solution, output, external) =>
         {
             MSBuildLocator.RegisterDefaults();
 
             // Extract the graph using our new extractor
             Graph graph;
-            // try
-            // {
-            graph = await FullCSharpGraphExtractor.ExtractAsync(solution);
-            // }
-            // catch (Exception ex)
-            // {
-            //     await Console.Error.WriteLineAsync($"Error during graph extraction: {ex.Message}");
-            //     return;
-            // }
+            try
+            {
+                graph = await FullCSharpGraphExtractor.ExtractAsync(solution, external);
+            }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync($"Error during graph extraction: {ex.Message}");
+                return;
+            }
 
             // Serialize graph to string
             var graphOutput = graph.ToString();

@@ -1,4 +1,5 @@
 ﻿using CSharPers.LPG;
+using CSharPers.Metrics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -15,8 +16,10 @@ public static class FullCSharpGraphExtractor
     ///     invokes, uses, instantiates, overrides),
     ///     plus NumMethods and NumStatements metric nodes.
     /// </summary>
-    public static async Task<Graph> ExtractAsync(string solutionPath)
+    public static async Task<Graph> ExtractAsync(string solutionPath, bool external)
     {
+        var includeExt = external;
+        
         // 0) Prepare
         var projectName = Path.GetFileNameWithoutExtension(solutionPath);
         var graph = new Graph(projectName);
@@ -118,6 +121,8 @@ public static class FullCSharpGraphExtractor
             }
             else
             {
+                if (!includeExt && !ns.Locations.Any(loc => loc.IsInSource))
+                    return;  // skip external namespace
                 var id = ns.ToString() ?? ns.ToDisplayString();
                 if (!scopeNodes.ContainsKey(ns))
                 {
@@ -162,6 +167,8 @@ public static class FullCSharpGraphExtractor
                 {
                     if (model.GetDeclaredSymbol(decl) is not INamedTypeSymbol sym) continue;
                     if (typeNodes.ContainsKey(sym)) continue;
+                    if (!includeExt && !sym.Locations.Any(loc => loc.IsInSource))
+                        continue;    // skip library types
 
                     // node
                     var id = sym.ToString() ?? sym.ToDisplayString();
@@ -239,6 +246,8 @@ public static class FullCSharpGraphExtractor
                 {
                     if (model.GetDeclaredSymbol(v) is not IFieldSymbol fsym) continue;
                     if (fieldNodes.ContainsKey(fsym)) continue;
+                    if (!includeExt && !fsym.Locations.Any(loc => loc.IsInSource))
+                        continue;
 
                     var idf = $"{fsym.ContainingType}.{fsym.Name}";
                     var fn = new Node(idf, "Variable")
@@ -272,6 +281,8 @@ public static class FullCSharpGraphExtractor
                 {
                     if (model.GetDeclaredSymbol(mdecl) is not IMethodSymbol msym) continue;
                     if (methodNodes.ContainsKey(msym)) continue;
+                    if (!includeExt && !msym.Locations.Any(loc => loc.IsInSource))
+                        continue;
 
                     // Operation node
                     var idm = msym.ToString() ?? msym.Name + msym.Parameters;
@@ -451,6 +462,45 @@ public static class FullCSharpGraphExtractor
             };
             graph.Edges.Add(e);
         }
+        
+        // 9) HALSTEAD METRICS
+
+        // single Halstead node
+        var hmNode = new Node($"{projectName}#HalsteadMetrics", "Metric")
+        {
+            Properties =
+            {
+                ["simpleName"] = "HalsteadMetrics",
+                ["qualifiedName"] = "HalsteadMetrics",
+                ["kind"] = "metric"
+            }
+        };
+        graph.Nodes.Add(hmNode);
+
+        foreach (var proj in solution.Projects)
+        {
+            var comp = await proj.GetCompilationAsync();
+            if (comp == null) continue;
+
+            var halList = HalsteadMetricsCalculator.Analyze(comp);
+
+            // one edge per metric entry
+            foreach (var m in halList)
+            {
+                // find the source node by qualifiedName
+                var source = graph.Nodes.FirstOrDefault(n =>
+                    n.Properties.TryGetValue("qualifiedName", out var qn) &&
+                    qn.Equals(m.ElementId));
+                if (source == null) continue;
+
+                var e = new Edge(source.Id, hmNode.Id, "measures");
+                // copy all metrics except id/kind
+                foreach (var kv in m.ToDictionary().Where(kv => kv.Key != "id" && kv.Key != "kind"))
+                    e.Properties[kv.Key] = kv.Value;
+                graph.Edges.Add(e);
+            }
+        }
+
 
         return graph;
     }
