@@ -18,7 +18,7 @@ Before running **CSharPers**, ensure you have the following installed:
 - **Roslyn (C# compiler)** – This is automatically used by the project for semantic analysis.
 - **MSBuild** – Required to process C# projects, integrated via the MSBuildLocator class.
 
-## Installation
+## Installing Dependencies
 
 Clone the repository and restore the project dependencies:
 
@@ -33,6 +33,10 @@ You can also install `System.CommandLine` for command-line argument parsing:
 ```bash
 dotnet add package System.CommandLine
 ```
+
+## Building
+
+Use your favourite .NET IDE.
 
 ## Usage
 
