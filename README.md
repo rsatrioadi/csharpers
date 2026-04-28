@@ -2,84 +2,118 @@
 
 tl;dr: Similar to [javapers](https://github.com/rsatrioadi/javapers) but for C#.
 
-**CSharPers** is a tool designed to process and analyze C# solutions, creating a graph-based representation of the various components within the solution. This includes classes, interfaces, methods, fields, parameters, and their relationships. The tool leverages Roslyn's compiler APIs to extract semantic information and constructs a graph where each node represents a C# symbol (e.g., classes, methods, parameters) and each edge represents a relationship between those symbols (e.g., method calling, inheritance, field usage).
+**CSharPers** processes C# codebases and produces a graph-based
+representation of the various components within them — classes,
+interfaces, methods, fields, parameters, and their relationships. The
+tool leverages Roslyn's compiler APIs to extract semantic information
+and constructs a graph where each node represents a C# symbol (e.g.
+classes, methods, parameters) and each edge represents a relationship
+between those symbols (e.g. method calling, inheritance, field usage).
 
-## Features
-- **Solution Parsing**: Parses C# solutions (.sln files) to build a graph of the project's structure.
-- **Node Representation**: Nodes represent various C# constructs such as classes, methods, fields, and parameters.
-- **Edge Representation**: Edges represent relationships like inheritance, method calls, field usage, etc.
-- **Output Options**: Results can be output to the console or saved to a file in JSON format for further analysis.
+## Two indexing modes
+
+CSharPers ships two extractors. Both produce the same SABO-shaped LPG
+graph; they differ only in how they discover source.
+
+| Command           | Input                             | Use when                                                                 |
+|-------------------|-----------------------------------|--------------------------------------------------------------------------|
+| `index`           | A directory of `.cs` files        | Unity projects, ad-hoc C# trees, anywhere `.sln` / `.csproj` is missing  |
+| `index-solution`  | A `.sln` file (MSBuild evaluated) | You have a buildable solution and want full reference resolution         |
+
+The source-only `index` mode does **not** require MSBuild and does **not**
+attempt to read `.csproj` files. It builds a single ad-hoc Roslyn
+`CSharpCompilation` from every `.cs` file under the input directory.
 
 ## Prerequisites
 
-Before running **CSharPers**, ensure you have the following installed:
+- **.NET SDK 8.0**
+- Roslyn — pulled in automatically as a NuGet dependency.
+- MSBuild — required only if you use `index-solution` (legacy mode).
 
-- **.NET SDK 6.0 or later**
-- **Roslyn (C# compiler)** – This is automatically used by the project for semantic analysis.
-- **MSBuild** – Required to process C# projects, integrated via the MSBuildLocator class.
-
-## Installing Dependencies
-
-Clone the repository and restore the project dependencies:
+## Building
 
 ```bash
 git clone https://github.com/rsatrioadi/csharpers.git
 cd csharpers
-dotnet restore
+dotnet build
 ```
-
-You can also install `System.CommandLine` for command-line argument parsing:
-
-```bash
-dotnet add package System.CommandLine
-```
-
-## Building
-
-Use your favourite .NET IDE.
 
 ## Usage
 
-### Command-Line Arguments
+### Source-only mode (recommended for Unity / no-solution trees)
 
-1. **Basic Usage**:
-   This will analyze a solution and output the graph to the console.
+```bash
+CSharPers index <directory> [options]
+```
 
-   ```bash
-   CSharPers path\to\solution.sln
-   ```
+Options:
 
-2. **Output to File**:
-   To specify an output file where the graph will be written (in JSON format), use the `-o` option:
+- `--name <project-name>`   Override the project node's `simpleName` and id (default: directory basename).
+- `--ref <dll-path>`        Add an extra reference DLL. Repeatable. Use this to point at `UnityEngine.dll`, NuGet artifacts, etc., when you want external types to resolve.
+- `--exclude <glob>`        Exclude paths matching the glob (relative to the input directory). Repeatable.
+- `-o`, `--output <file>`   Write output to a file instead of stdout.
+- `-e`, `--include-external` Include symbols whose `Locations` are not in source.
 
-   ```bash
-   CSharPers path\to\solution.sln -o path\to\output.json
-   ```
+By default, the walker excludes `bin`, `obj`, `Library`, `Temp`,
+`.git`, `.vs`, `.idea`, `node_modules`, `packages`, plus
+`*.Designer.cs` and `*.g.cs`.
 
-   or
+Examples:
 
-   ```bash
-   CSharPers -o path\to\output.json path\to\solution.sln
-   ```
+```bash
+# Index a Unity Assets folder
+CSharPers index ./MyUnityProject/Assets/Scripts -o graph.json
 
-### Options
-- **`-o` or `--output`**: Specifies the path to the output file. If not provided, the output is printed to the console.
+# Same, but resolve UnityEngine references
+CSharPers index ./MyUnityProject/Assets/Scripts \
+    --ref ./MyUnityProject/Library/ScriptAssemblies/UnityEngine.dll \
+    -o graph.json
+
+# Override the project name and exclude a tests subtree
+CSharPers index ./src --name MyApp --exclude "Tests/**" -o graph.json
+```
+
+### Solution mode (legacy)
+
+```bash
+CSharPers index-solution <path-to-solution.sln> [-o <file>] [-e]
+```
+
+This loads the solution via `MSBuildWorkspace`, evaluates each project,
+and uses the project's full reference closure for binding. Use it when
+you need the most accurate cross-reference graph.
 
 ### Output
-The output of the tool is a JSON representation of the parsed C# solution. Each node in the graph represents a C# element such as a class, method, field, etc., while edges represent relationships between these elements.
 
-For example, a class with methods, fields, and parameters would generate nodes for the class, methods, fields, and parameters, with edges indicating method invocation, field usage, and more.
+The resulting JSON can be visualized in
+[ClassViz](https://satrio.rukmono.id/classviz)
+([alternate link](https://rsatrioadi.github.io/classviz)).
 
-The resulting JSON file (produced using `-o` or redirecting console output to a file) can be visualized in [ClassViz](https://satrio.rukmono.id/classviz) ([alternate link](https://rsatrioadi.github.io/classviz)).
+## Architecture
+
+The two extractors share an interface so that future hosts (a server,
+LSP integration, etc.) can dispatch over them:
+
+```csharp
+public interface IGraphExtractor
+{
+    Task<Graph> ExtractAsync();
+}
+```
+
+- `SourceOnlyCSharpGraphExtractor` — directory in, ad-hoc `CSharpCompilation`.
+- `MSBuildSolutionGraphExtractor` — `.sln` in, MSBuild-evaluated workspace.
+
+A small parity report comparing the two on this repo is at
+[`tests/parity-report.md`](tests/parity-report.md). A minimal end-to-end
+fixture lives at [`tests/fixtures/SimpleApp/`](tests/fixtures/SimpleApp).
 
 ## Customization
-The tool is designed to be easily extendable. You can:
-- Modify the `NodeFactory` to add custom properties or edge types.
-- Extend the graph processing to support additional C# constructs or relationships.
-- Change the output format or extend the serialization functionality.
+
+- Modify the extractors to add custom properties or edge types.
+- Extend graph processing to support additional C# constructs or relationships.
+- Change the output format by adding a new codec under `CSharPers/LPG`.
 
 ## Contributing
-We welcome contributions! Feel free to submit issues and pull requests. Here are some ways you can help:
-- Fix bugs or improve the parsing logic.
-- Enhance the documentation.
-- Add more features for graph representation (e.g., more edge types or custom visualizations).
+
+We welcome contributions! Feel free to submit issues and pull requests.
