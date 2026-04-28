@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 
 namespace CSharPers.Extractor;
 
-public static class FullCSharpGraphExtractor
+public class MSBuildSolutionGraphExtractor(string solutionPath, bool includeExternal) : IGraphExtractor
 {
     /// <summary>
     ///     Builds a Graph from a .sln file, mirroring the Java extractor’s schema:
@@ -16,9 +16,9 @@ public static class FullCSharpGraphExtractor
     ///     invokes, uses, instantiates, overrides),
     ///     plus NumMethods and NumStatements metric nodes.
     /// </summary>
-    public static async Task<Graph> ExtractAsync(string solutionPath, bool external)
+    public async Task<Graph> ExtractAsync()
     {
-        var includeExt = external;
+        var includeExt = includeExternal;
         
         // 0) Prepare
         var projectName = Path.GetFileNameWithoutExtension(solutionPath);
@@ -105,7 +105,7 @@ public static class FullCSharpGraphExtractor
             ));
 
         // 3) SCOPES (namespaces)
-        var scopeNodes = new Dictionary<INamespaceSymbol, Node>();
+        var scopeNodes = new Dictionary<INamespaceSymbol, Node>(SymbolEqualityComparer.Default);
         foreach (var proj in solution.Projects)
         {
             var comp = await proj.GetCompilationAsync();
@@ -152,7 +152,7 @@ public static class FullCSharpGraphExtractor
         }
 
         // 4) TYPES (classes, interfaces, structs, enums)
-        var typeNodes = new Dictionary<INamedTypeSymbol, Node>();
+        var typeNodes = new Dictionary<INamedTypeSymbol, Node>(SymbolEqualityComparer.Default);
         foreach (var proj in solution.Projects)
         {
             var comp = await proj.GetCompilationAsync();
@@ -227,8 +227,8 @@ public static class FullCSharpGraphExtractor
         }
 
         // 6) OPERATIONS & VARIABLES
-        var methodNodes = new Dictionary<IMethodSymbol, Node>();
-        var fieldNodes = new Dictionary<IFieldSymbol, Node>();
+        var methodNodes = new Dictionary<IMethodSymbol, Node>(SymbolEqualityComparer.Default);
+        var fieldNodes = new Dictionary<IFieldSymbol, Node>(SymbolEqualityComparer.Default);
 
         foreach (var proj in solution.Projects)
         {
