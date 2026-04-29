@@ -51,10 +51,25 @@ public class SourceOnlyCSharpGraphExtractor(
             .Select(p => CSharpSyntaxTree.ParseText(File.ReadAllText(p), path: p))
             .ToList();
 
-        var refs = new List<MetadataReference>
+        var refs = new List<MetadataReference>();
+        // typeof(object).Assembly.Location is empty on some Linux runtime
+        // configurations (AUR/pacman packages, flatpaks, single-file publish).
+        // Fall back to TRUSTED_PLATFORM_ASSEMBLIES to find CoreLib.
+        var objLoc = typeof(object).Assembly.Location;
+        if (!string.IsNullOrEmpty(objLoc))
         {
-            MetadataReference.CreateFromFile(typeof(object).Assembly.Location)
-        };
+            refs.Add(MetadataReference.CreateFromFile(objLoc));
+        }
+        else
+        {
+            var tpa = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "";
+            var corePath = tpa
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault(p => Path.GetFileName(p).Equals(
+                    "System.Private.CoreLib.dll", StringComparison.OrdinalIgnoreCase));
+            if (corePath != null)
+                refs.Add(MetadataReference.CreateFromFile(corePath));
+        }
         foreach (var dll in extraReferenceDlls)
             refs.Add(MetadataReference.CreateFromFile(dll));
 
