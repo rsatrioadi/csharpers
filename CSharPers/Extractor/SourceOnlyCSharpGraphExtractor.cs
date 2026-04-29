@@ -336,22 +336,36 @@ public class SourceOnlyCSharpGraphExtractor(
 
             foreach (var inv in decl.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (model.GetSymbolInfo(inv).Symbol is IMethodSymbol target
-                    && methodNodes.TryGetValue(target, out var tn))
+                // When argument types depend on external references (e.g. calls inside
+                // lambdas whose parameter types can't be inferred, or calls where an
+                // argument is an external type), Roslyn sets Symbol = null but still
+                // populates CandidateSymbols. Fall back to the first candidate.
+                // Use OriginalDefinition so generic-method calls match the declaration.
+                var info = model.GetSymbolInfo(inv);
+                var target = (info.Symbol as IMethodSymbol
+                    ?? info.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault())
+                    ?.OriginalDefinition;
+                if (target != null && methodNodes.TryGetValue(target, out var tn))
                     graph.Edges.Add(new Edge(mNode.Id, tn.Id, "invokes"));
             }
 
             foreach (var oc in decl.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             {
-                if (model.GetTypeInfo(oc).Type is INamedTypeSymbol ocType
-                    && typeNodes.TryGetValue(ocType, out var tn2))
+                var ocType = (model.GetTypeInfo(oc).Type
+                    ?? model.GetSymbolInfo(oc).CandidateSymbols
+                        .OfType<IMethodSymbol>().FirstOrDefault()?.ContainingType)
+                    as INamedTypeSymbol;
+                if (ocType != null && typeNodes.TryGetValue(ocType.OriginalDefinition, out var tn2))
                     graph.Edges.Add(new Edge(mNode.Id, tn2.Id, "instantiates"));
             }
 
             foreach (var ma in decl.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
-                if (model.GetSymbolInfo(ma).Symbol is IFieldSymbol fs
-                    && fieldNodes.TryGetValue(fs, out var fn))
+                var info = model.GetSymbolInfo(ma);
+                var fs = (info.Symbol as IFieldSymbol
+                    ?? info.CandidateSymbols.OfType<IFieldSymbol>().FirstOrDefault())
+                    ?.OriginalDefinition;
+                if (fs != null && fieldNodes.TryGetValue(fs, out var fn))
                     graph.Edges.Add(new Edge(mNode.Id, fn.Id, "uses"));
             }
 
